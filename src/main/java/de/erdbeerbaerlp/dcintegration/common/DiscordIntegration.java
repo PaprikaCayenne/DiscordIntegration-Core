@@ -401,7 +401,7 @@ public class DiscordIntegration {
                 if (instant) {
                     LOGGER.info("Killing JDA...");
                     jda.shutdownNow();
-                    jda.awaitShutdown();
+                    jda.awaitShutdown(Duration.ofSeconds(5));
                     LOGGER.info("JDA was killed");
                 } else {
                     LOGGER.info("Waiting for JDA to shut-down...");
@@ -409,17 +409,23 @@ public class DiscordIntegration {
                     if (!this.jda.awaitShutdown(Duration.ofSeconds(10))) {
                         LOGGER.info("Killing JDA due to timeout...");
                         jda.shutdownNow();
-                        jda.awaitShutdown();
+                        jda.awaitShutdown(Duration.ofSeconds(5));
                         LOGGER.info("JDA was killed");
                     } else LOGGER.info("JDA shut-down gracefully");
                 }
-                client.dispatcher().cancelAll();
-                client.connectionPool().evictAll();
-                client.dispatcher().executorService().shutdown();
             } catch (LinkageError ignored) { // Fix exception logged when reloading
                 ignored.printStackTrace();
             } catch (InterruptedException ignored) { // Interruption is fine when shutting down
                 ignored.printStackTrace();
+            } finally {
+                // Always clean up OkHttp threads - must run even if JDA shutdown throws
+                try {
+                    client.dispatcher().cancelAll();
+                    client.connectionPool().evictAll();
+                    client.dispatcher().executorService().shutdown();
+                } catch (Exception e) {
+                    LOGGER.warn("OkHttp cleanup failed: " + e.getMessage());
+                }
             }
             jda = null;
             INSTANCE = null;
